@@ -19,7 +19,9 @@
 #include <map>
 #include <set>
 #include <iostream>
-#include "../json/json.h"
+#include <cassert>
+#include <cmath>
+#include "./json/json.h"
 
 using namespace std;
 typedef int    TMovePoint;     //【FC18】行动力
@@ -91,14 +93,12 @@ struct TowerConfig {
 	int battleRegion;         //攻击距离
 };
 
-
 //【FC18】兵团种类
 enum corpsType
 {
 	Battle = 0,          //作战兵团
 	Construct = 1        //工程建设兵团
 };
-
 
 //【FC18】作战兵团种类的枚举类
 enum battleCorpsType
@@ -108,23 +108,18 @@ enum battleCorpsType
 	Cavalry = 2,         //骑兵
 };
 
-
 //【FC18】工程建设兵团的枚举类
 enum constructCorpsType
 {
 	Builder = 0,           //建造者
-	Extender = 1           //开拓者
+	Explorer = 1           //开拓者
 };
-
-
-
 
 //【FC18】命令类型
 enum commandType {
 	corpsCommand = 0,         //兵团命令
 	towerCommand = 1,         //防御塔命令
 };
-
 
 //【FC18】兵团操作类型（C前缀表示Corps）
 enum CorpsCommandEnum
@@ -176,7 +171,6 @@ enum towerCommand
 	TAttackTower = 2        //攻击塔任务
 };
 
-
 //【FC18】塔的生产任务类型（P表示product）
 enum productType
 {//                                           生产回报
@@ -188,7 +182,6 @@ enum productType
 	PUpgrade = 5,       //塔升级任务         塔等级+1（max=8)
 	NOTASK = -1
 };
-
 
 //【FC18】地形的枚举类（TR前缀表示地形）
 enum terrainType
@@ -295,7 +288,7 @@ const TBattlePoint corpsBattlePoint[BATTLE_CORPS_TYPE_NUM][MAX_CORPS_LEVEL] =
 
 
 //【FC18】作战兵团的战斗力增益系数（与作战兵团的枚举类在序号上对应，且考虑了等级）
-const TIntPara corpsBattleGain[BATTLE_CORPS_TYPE_NUM][MAX_CORPS_LEVEL] =
+const TIntPara corpsTowerGain[BATTLE_CORPS_TYPE_NUM][MAX_CORPS_LEVEL] =
 {
 	{2,   2,   2},    //战士
 	{2,   2,   2},    //弓箭手
@@ -344,7 +337,6 @@ const TOperaNum CorpsOperaNumNeed[CORPS_ACTION_TYPE_NUM] =
 	3     //改地形
 };
 
-
 //【FC18】工程建设兵团操作的劳动力消耗（与兵团操作的枚举类在序号上对应)
 const TBuildPoint constructBuildCost[CORPS_ACTION_TYPE_NUM] =
 {
@@ -379,7 +371,6 @@ const TProductPoint TowerProductCost[TOWER_PRODUCT_TASK_NUM] =
 	40        //塔升级任务      塔等级+1（max=8)       这里40是最小值，实际值为执行该任务的第一回合塔的等级*40，要根据实际情况算  
 };
 
-
 //【FC18】每回合塔的经验值增加与回合数的关系
 //【GC18】注意实际访问的时候，传入回合数/100下取整，300回合传入2,301回合起传入3
 //【FC18】或直接公式计算：5 + 5 * floor(currentRound / 100)，注意边界值要特殊对待
@@ -393,8 +384,9 @@ const TExperPoint TowerExperGain[TOWER_EXPER_GAIN_SCALE + 1] =
 
 
 //【FC18】塔对周围方格施加的占有属性值，与距离的关系表
-const TOccupyPoint TowerOccupyPoint[OCCUPY_POINT_DIST_SCALE + 1] =
+const TOccupyPoint TowerOccupyPoint[OCCUPY_POINT_DIST_SCALE + 2] =
 {//                方格跟塔的距离
+	INF,//              0格
 	100,//              1格
 	80,//               2格
 	50,//               3格
@@ -431,7 +423,7 @@ const TMovePoint CorpsMoveCost[TERRAIN_TYPE_NUM + 1] =
 
 
 //【FC18】战斗力增益（与地形的枚举类在序号上对应）
-const TBattlePoint CorpsBattleGain[TERRAIN_TYPE_NUM + 1] =
+const TBattlePoint corpsTerrainGain[TERRAIN_TYPE_NUM + 1] =
 {
 	0,    //塔
 	0,    //平原
@@ -447,12 +439,23 @@ class TowerInfo
 {
 public:
 	TowerInfo(){};			      // 空构造函数 —— swm_sxt
+	TowerInfo(TTowerID _ID, TPlayerID _o,TPoint _pos,int _l = 1) :
+		exist(true), ID(_ID),ownerID(_o),pos(_pos),
+		productPoint(TowerInitConfig[_l-1].initBuildPoint),
+		battlePoint(TowerInitConfig[_l-1].initProductPoint),
+		healthPoint(TowerInitConfig[_l-1].initHealthPoint),
+		level(_l),
+		pdtType(NOTASK),
+		productConsume(0)
+	{
+
+	}
 	TowerInfo(Json::Value);       // 从Json对象构造 —— swm_sxt
 
 	bool exist;					  //防御塔是否存在
 	TTowerID ID;				  //防御塔ID
 	TPlayerID ownerID;			  //所属玩家ID
-	TPoint position;			  //位置
+	TPoint pos;			  //位置
 	TProductPoint productPoint;	  //生产力
 	productType pdtType;		  //塔上一次生产任务指令后尚未完成的任务种类（若上一次任务指令完成，则为-1）
 	TProductPoint productConsume; //塔上一次生产任务指令后未完成任务的剩余的工作余量
@@ -473,7 +476,7 @@ public:
 	bool exist;						//是否存在
 	TPoint pos;						//兵团坐标
 	TCorpsID ID;					//兵团ID
-	THealthPoint HealthPoint;		//生命值
+	THealthPoint healthPoint;		//生命值
 	TBuildPoint BuildPoint;			//劳动力
 	TPlayerID owner;				//所属玩家ID
 	corpsType type;					//兵团种类
@@ -490,6 +493,9 @@ class PlayerInfo
 {
 public:
 	PlayerInfo(){};			 // 空构造函数 —— swm_sxt
+	PlayerInfo(TPlayerID _id) :id(_id), rank(_id),alive(true){
+
+	}
 	PlayerInfo(Json::Value); // 从Json对象构造 —— swm_sxt
 	TPlayerID id;			 //【FC18】玩家的序号，请注意玩家序号从1开始，访问玩家数组请用[ID-1]
 	int rank;				 //【FC18】该选手排名（出局者直接由出局回合数给位次）|（存活者按防御塔得分和兵团得分来排名）|（同名次按防御塔攻占数、消灭敌方军团数、俘虏敌方军团数依次检索排名）|（仍有同名次者随机分配排名）
@@ -509,7 +515,10 @@ public:
 class mapBlock //【FC18】地图方格类
 {
 public:
-	mapBlock(){};			 // 空构造函数 —— swm_sxt
+	mapBlock(){}
+	mapBlock(terrainType _type, int _owner, int _TowerIndex) :
+		type(_type), owner(_owner), TowerIndex(_TowerIndex)
+	{};			 // 空构造函数 —— swm_sxt
 	mapBlock(Json::Value);	 // 从Json对象构造 —— swm_sxt
 	terrainType type;		 //【FC18】地块类型，对应terrainType枚举类
 	vector<int> occupyPoint; //【FC18】各玩家的占有属性值，秩为玩家序号-1
@@ -535,6 +544,7 @@ public:
 class CommandList;
 //常用数学运算
 //二维坐标减运算
+TPoint operator+(const TPoint &p1, const TPoint &p2);
 TPoint operator-(const TPoint &p1, const TPoint &p2);
 //计算欧式距离
 TLength getDistance(const TPoint &p1, const TPoint &p2);
@@ -669,7 +679,10 @@ private:
 class Info
 {
 public:
-	Info(){};			  // 空构造函数 —— swm_sxt
+	Info(){};
+	Info(TPlayer initatePlayers) : totalPlayers(initatePlayers), playerAlive(initatePlayers) {
+
+	};			  // 空构造函数 —— swm_sxt
 	Info(Json::Value);	  // 从Json对象构造 —— swm_sxt
 	TPlayer totalPlayers; //【FC18】总玩家数（4人）
 	TPlayer playerAlive;  //【FC18】剩余玩家数（还活着的）
@@ -702,15 +715,422 @@ public:
 
 // clang-format on
 
-class AllInfo : public Info {
+class Game : public Info {
+  private:
+    int                      id;        // 地图编号
+    TMap                     m_width;   //【FC18】地图宽度
+    TMap                     m_height;  //【FC18】地图高度
+    vector<vector<mapBlock>> gameMap;
+    vector<vector<mapBlock>> _gameMap_backup;  // 考虑到可能有塔变成平地的情况
   public:
-    AllInfo() {}
+    Game(TMap _width, TMap _height, TPlayer _players, int _id)
+        : m_width(_width), m_height(_height), id(_id), Info(_players) {
+        srand(id);
+        gameMapInfo = &gameMap;
+        generateMap();
+        _gameMap_backup = gameMap;
+        generateTower();
+        generateUser();
+        updateInfo();
+    }
+    ~Game() {}
+    //【FC18】获取地图宽度
+    TMap getWidth() const {
+        return m_width;
+    }
+    //【FC18】获取地图高度
+    TMap getHeight() const {
+        return m_height;
+    }
     void generateMap() {
-		
+        for(int i = 0; i < m_width; i++) {
+            vector<mapBlock> _tmp_column;
+            for(int j = 0; j < m_height; j++) {
+                int t = rand() % 5 + 1;
+                switch(t) {
+                    case 1:
+                        _tmp_column.push_back(mapBlock(TRPlain, -2, -1));
+                        break;
+                    case 2:
+                        _tmp_column.push_back(mapBlock(TRMountain, -2, -1));
+                        break;
+                    case 3:
+                        _tmp_column.push_back(mapBlock(TRForest, -2, -1));
+                        break;
+                    case 4:
+                        _tmp_column.push_back(mapBlock(TRSwamp, -2, -1));
+                        break;
+                    case 5:
+                        _tmp_column.push_back(mapBlock(TRRoad, -2, -1));
+                        break;
+                    default: exit(1); break;
+                }
+            }
+            gameMap.push_back(_tmp_column);
+        }
+    }
+    void generateUser() {}
+    void generateTower() {
+        // 尽量在四周建造最初的塔!
+        // 默认就四个角，5*5 的空当
+        // 假装我已经知道只有四个玩家。
+        addTower(1, TPoint({rand() % 5, rand() % 5}));
+        addTower(2, TPoint({rand() % 5, 10 + rand() % 5}));
+        addTower(3, TPoint({10 + rand() % 5, rand() % 5}));
+        addTower(4, TPoint({10 + rand() % 5, 10 + rand() % 5}));
+    }
+    mapBlock &block(TPoint p) {
+        return gameMap[p.m_y][p.m_x];
+    }
+    bool isMyTower(TPlayerID pid, TTowerID tid) {
+        return pid == towerInfo[tid].ownerID;
+    }
+    bool isMyCorp(TPlayerID pid, TCorpsID cid) {
+        return pid == corpsInfo[cid].owner;
+    }
+	bool isMyCell(TPlayerID pid, TPoint p){
+		return pid == block(p).owner;
 	}
+    int needMoveCost(TPoint a, TPoint b) {
+        return ceil(double(CorpsMoveCost[block(a).type] +
+                           CorpsMoveCost[block(b).type]) /
+                    2);
+    }
+    TDoublePara getCorpsForce(CorpsInfo &corps) {
+        return double(1) * double(corpsBattlePoint[corps.m_BattleType][0]) *
+            double(corps.healthPoint) /
+            double(battleHealthPoint[corps.m_BattleType][0]) +
+            double(corpsTerrainGain[block(corps.pos).type]);
+    }
+    TDoublePara getTowerForce(TowerInfo &tower) {
+        TDoublePara sumf = 0;
+        for(TCorpsID cid : block(tower.pos).corps) {
+            if(corpsInfo[cid].type == Battle) {
+                sumf += corpsTowerGain[corpsInfo[cid].m_BattleType][0];
+            }
+        }
+        TowerConfig conf = TowerInitConfig[tower.level - 1];
+        return double(1) * conf.initProductPoint * double(tower.healthPoint) /
+            conf.initHealthPoint +
+            sumf;
+    }
+    void deadCorps(TCorpsID cid) {}
+    void getCorps(TCorpsID cid, TPlayerID pid) {}
+    void addTower(TPlayerID pid, TPoint p) {
+        // totalTowers++;
+        // gameMap[t.pos.m_y][t.pos.m_x].TowerIndex = t.ID;
+        // towerInfo.push_back(t);
+    }
+    void deadTower(TTowerID tid) {}
+    void getTower(TTowerID tid, TPlayerID pid) {}
+    void corpsMove(CorpsInfo &corps, const vector<int> &par) {
+        const static TPoint mp[4] = {{0, -1}, {0, 1}, {-1, 0}, {0, 1}};
+        TPoint              pos = corps.pos, dest = corps.pos + mp[par[2]];
+        if(!isPosValid(dest)) {
+            return;
+        }
+        if(block(dest).TowerIndex != -1 &&
+           !isMyTower(corps.owner, block(dest).TowerIndex)) {
+            return;
+        }
+        if(block(dest).TowerIndex == -1 && block(dest).corps.size() >= 2) {
+            return;
+        }
+        if(block(dest).TowerIndex == -1 && block(dest).corps.size() == 1 &&
+           (!isMyCorp(corps.owner, block(dest).corps[0]) ||
+            corpsInfo[block(dest).corps[0]].type == corps.type)) {
+            return;
+        }
+        if(needMoveCost(pos, dest) > corps.movePoint) {
+            return;
+        }
+
+        corps.pos = dest;
+        for(int i = 0; i < block(pos).corps.size(); i++) {
+            if(block(pos).corps[i] == corps.ID) {
+                block(pos).corps.erase(block(pos).corps.begin() + i);
+                break;
+            }
+        }
+        block(dest).corps.push_back(corps.ID);
+        corps.movePoint -= needMoveCost(pos, dest);
+    }
+    void corpsAttackCorps(CorpsInfo &corps, const vector<int> &par) {
+        TCorpsID tarID = par[2];
+        if(corps.type == Construct) {
+            return;
+        }
+        if(tarID >= corpsInfo.size()) {
+            return;
+        }
+        CorpsInfo &tar = corpsInfo[tarID];
+        if(!tar.exist || isMyCorp(corps.owner, tarID)) {
+            return;
+        }
+        if(corps.movePoint == 0) {
+            return;
+        }
+        if(getDist(corps.pos, tar.pos) > TBattleRange[corps.m_BattleType]) {
+            return;
+        }
+        if(block(tar.pos).TowerIndex != -1) {
+            corpsAttackTower(
+                corps, {CAttackTower, corps.ID, block(tar.pos).TowerIndex});
+            return;
+        }
+        if(tar.type == Construct) {
+            if(block(tar.pos).corps.size() > 1) {
+                int real_tar = int(block(tar.pos).corps[0] == corps.ID);
+                real_tar     = block(tar.pos).corps[real_tar];
+                corpsAttackCorps(corps, {CAttackCorps, corps.ID, real_tar});
+            }
+            else {
+                getCorps(tarID, corps.owner);
+            }
+        }
+        else if(tar.type == Battle) {
+            TDoublePara fa = getCorpsForce(corps), fb = getCorpsForce(tar);
+            TDoublePara myHealthLost  = (corps.m_BattleType == Archer ?
+                                             0 :
+                                             (28 * exp(0.04 * (fa - fb)))),
+                        tarHealthLost = (30 * exp(0.04 * (fb - fa)));
+            if(corps.healthPoint - myHealthLost < 0) {
+                deadCorps(corps.ID);
+            }
+            else {
+                corps.healthPoint -= myHealthLost;
+            }
+            if(tar.healthPoint - tarHealthLost < 0) {
+                deadCorps(tar.ID);
+                if(block(tar.pos).corps.size() >= 1) {
+                    getCorps(block(tar.pos).corps[0], corps.owner);
+                }
+            }
+            else {
+                tar.healthPoint -= tarHealthLost;
+            }
+			corps.movePoint = 0;
+        }
+        else {
+            assert(0);
+        }
+    }
+    void corpsAttackTower(CorpsInfo &corps, const vector<int> &par) {
+        TTowerID tarID = par[2];
+        if(corps.type == Construct) {
+            return;
+        }
+        if(tarID >= towerInfo.size()) {
+            return;
+        }
+        TowerInfo &tar = towerInfo[tarID];
+        if(!tar.exist || isMyTower(corps.owner, tarID)) {
+            return;
+        }
+        if(getDist(corps.pos, tar.pos) > TBattleRange[corps.m_BattleType]) {
+            return;
+        }
+        TDoublePara fa = getCorpsForce(corps), fb = getTowerForce(tar);
+        TDoublePara myHealthLost = (corps.m_BattleType == Archer ?
+                                        0 :
+                                        (28 * exp(0.04 * (fa - fb)))),
+                    tarHealthLost =
+                        (30 * corpsAttackTowerGain[corps.m_BattleType][0] *
+                         exp(0.04 * (fb - fa)));
+        if(corps.healthPoint - myHealthLost < 0) {
+            deadCorps(corps.ID);
+        }
+        else {
+            corps.healthPoint -= myHealthLost;
+        }
+        if(tar.healthPoint - tarHealthLost < 0) {
+            if(tar.level - 4 <= 0) {
+                deadTower(tar.ID);
+            }
+            else {
+                getTower(tar.ID, corps.owner);
+            }
+        }
+        else {
+            tar.healthPoint -= tarHealthLost;
+        }
+		corps.movePoint = 0;
+    }
+    void corpsBuild(CorpsInfo &corps, const vector<int> &par) {
+		if(corps.type != Construct || corps.m_BuildType != Explorer) {
+			return;
+		}
+		if(corps.movePoint <= 0) {
+			return;
+		}
+		if(block(corps.pos).TowerIndex != -1){
+			return;
+		}
+		if(!isMyCell(corps.owner,corps.pos)){
+			return;
+		}
+		deadCorps(corps.ID);
+		addTower(corps.owner,corps.pos);
+    }
+    void corpsRepair(CorpsInfo &corps, const vector<int> &par) {
+		if(corps.type != Construct || corps.m_BuildType != Builder){
+			return;
+		}
+		if(corps.movePoint <= 0) {
+			return;
+		}
+		TTowerID tid = block(corps.pos).TowerIndex;
+		if(tid == -1 || !isMyTower(corps.owner,tid)){
+			return;
+		}
+		TowerInfo &tower = towerInfo[tid];
+		THealthPoint maxHealth = TowerInitConfig[tower.level - 1].initHealthPoint;
+		tower.healthPoint = max(tower.healthPoint + int(double(1)/3 * maxHealth), maxHealth);
+		if(corps.BuildPoint == 1){
+			deadCorps(corps.ID);
+		}
+		else{
+			corps.BuildPoint -= 1;
+		}
+    }
+    void corpsChangeTerrain(CorpsInfo &corps, const vector<int> &par) {
+		if(corps.type != Construct || corps.m_BuildType != Builder){
+			return;
+		}
+		if(corps.movePoint <= 0) {
+			return;
+		}
+		if(block(corps.pos).type == TRPlain) {
+			_gameMap_backup[corps.pos.m_y][corps.pos.m_x].type = TRForest;
+		} else if(block(corps.pos).type == TRForest) {
+			_gameMap_backup[corps.pos.m_y][corps.pos.m_x].type = TRPlain;
+		} 
+		if(corps.BuildPoint == 1){
+			deadCorps(corps.ID);
+		}
+		else{
+			corps.BuildPoint -= 1;
+		}        
+    }
+    void doCommand(TPlayerID playerID, Command &todoCmd) {
+        if(todoCmd.cmdType == towerCommand) {
+            // 判断合法性
+            TTowerID towerID = todoCmd.parameters[1];
+            if(towerID >= (int)towerInfo.size())
+                return;
+            TowerInfo &tower = towerInfo[towerID];
+            if(tower.ownerID != playerID)
+                return;
+            if(!tower.exist)
+                return;
+
+            switch(todoCmd.parameters[0]) {
+                case TProduct: break;
+                case TAttackCorps: break;
+                default: break;
+            }
+        }
+        else if(todoCmd.cmdType == corpsCommand) {
+            TCorpsID corpsID = todoCmd.parameters[1];
+            if(corpsID >= (int)corpsInfo.size())
+                return;
+            CorpsInfo &corps = corpsInfo[corpsID];
+            if(corps.owner != playerID)
+                return;
+            if(!corps.exist)
+                return;
+
+            switch(todoCmd.parameters[0]) {
+                case CMove: corpsMove(corps, todoCmd.parameters); break;
+                case CAttackCorps:
+                    corpsAttackCorps(corps, todoCmd.parameters);
+                    break;
+                case CAttackTower:
+                    corpsAttackTower(corps, todoCmd.parameters);
+                    break;
+                case CBuild: corpsBuild(corps, todoCmd.parameters); break;
+                case CRepair: corpsRepair(corps, todoCmd.parameters); break;
+                case CChangeTerrain:
+                    corpsChangeTerrain(corps, todoCmd.parameters);
+                    break;
+                default: assert(0); break;
+            }
+        }
+        else {
+            assert(0);
+        }
+    }
     // 为第 id 用户执行 todoCommandList, 更新到 Info 当中
-    void           operateCommand(TPlayerID id, CommandList todoCommandList) {}
-    vector<TScore> giveScore() {}
+    void operateCommandList(TPlayerID playerID, CommandList &todoCommandList) {
+        for(Command todoCommand : todoCommandList) {
+            doCommand(playerID, todoCommand);
+        }
+    }
+
+    // 维护相关函数
+	void updateTerrain(){
+		for(int j = 0;j < m_width;j++){
+			for(int i = 0;i < m_width;i++){
+				if(gameMap[j][i].type != TRTower){
+					gameMap[j][i].type = _gameMap_backup[j][i].type;
+				}
+			}
+		}
+	}
+    void updateMapTower() {
+        // 主要是要更新 Map 的归属。
+        // todo: 别忘了加过渡的单位
+        for(TowerInfo tower : towerInfo) {
+            if(!tower.exist)
+                continue;
+            TPlayerID ownerID = tower.ownerID;
+            TTowerID  towerID = tower.ID;
+            TPoint    pos     = tower.pos;
+
+            gameMap[pos.m_y][pos.m_x].TowerIndex = towerID;
+            int L                                = OCCUPY_POINT_DIST_SCALE;
+            for(int j = -L; j <= L; j++) {
+                for(int i = -L; i <= L; i++) {
+                    TPoint t = pos + TPoint({i, j});
+                    if(!isPosValid(t))
+                        continue;
+                    mapBlock &cell = gameMap[t.m_y][t.m_x];
+                    cell.occupyPoint[ownerID - 1] +=
+                        TowerOccupyPoint[getDist(pos, t)];
+                }
+            }
+        }
+        for(int j = 0; j < m_width; j++) {
+            for(int i = 0; i < m_height; i++) {
+                int       maxPoint = 0, maxPlayer = -2;
+                mapBlock &cell = gameMap[j][i];
+                for(int player = 1; player <= totalPlayers; player++) {
+                    if(cell.occupyPoint[player - 1] > maxPoint) {
+                        maxPoint  = cell.occupyPoint[player - 1];
+                        maxPlayer = player;
+                    }
+                }
+                cell.owner = maxPlayer;
+            }
+        }
+    }
+    void updatePlayer() {}
+    void updateInfo() {
+        // lots of things to do .
+		updateTerrain();
+        updatePlayer();
+    }
+    Json::Value play(TPlayerID playerID, CommandList &todoCommandList) {
+        operateCommandList(playerID, todoCommandList);
+        updateInfo();
+        return asJson();
+    }
+    bool isPosValid(TPoint p) {
+        return isPosValid(p.m_x, p.m_y);
+    }  //判断点是否越界
+    bool isPosValid(int x, int y) {
+        return x >= 0 && x < m_width && y >= 0 && y < m_height;
+    }
 };
 
 #endif  // DEFINITION_H

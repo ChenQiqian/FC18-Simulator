@@ -1,6 +1,14 @@
 #include "definition.h"
 #include <cmath>
 #include <algorithm>
+TPoint operator+(const TPoint& p1, const TPoint& p2)
+{
+	TPoint ret;
+	ret.m_x = p1.m_x + p2.m_x;
+	ret.m_y = p1.m_y + p2.m_y;
+	return ret;
+}
+
 TPoint operator-(const TPoint& p1, const TPoint& p2)
 {
 	TPoint ret;
@@ -46,8 +54,8 @@ TDist getDist(const int p1_x, const int p1_y, const int p2_x, const int p2_y) {
 
 
 TowerInfo::TowerInfo(Json::Value json){
-	position.m_x = json["position"][0].asInt();
-	position.m_y = json["position"][1].asInt();
+	pos.m_x = json["position"][0].asInt();
+	pos.m_y = json["position"][1].asInt();
 
 	exist = json["exist"].asBool();
 	ID = json["ID"].asInt();
@@ -63,8 +71,8 @@ Json::Value TowerInfo::asJson() const{
 	Json::Value result;
 
 	Json::Value posJson;
-	posJson.append(position.m_x);
-	posJson.append(position.m_y);
+	posJson.append(pos.m_x);
+	posJson.append(pos.m_y);
 	result["position"] = posJson;
 
 	result["exist"] = exist;
@@ -86,7 +94,7 @@ CorpsInfo::CorpsInfo(Json::Value json){
 
 	exist = json["exist"].asBool();
 	ID = json["ID"].asInt();
-	HealthPoint = json["HealthPoint"].asInt();
+	healthPoint = json["HealthPoint"].asInt();
 	BuildPoint = json["BuildPoint"].asInt();
 	owner = json["owner"].asInt();
 	type = corpsType(json["type"].asInt());
@@ -104,7 +112,7 @@ Json::Value CorpsInfo::asJson() const{
 	
 	result["exist"] = exist;
 	result["ID"] = ID;
-	result["HealthPoint"] = HealthPoint;
+	result["HealthPoint"] = healthPoint;
 	result["BuildPoint"] = BuildPoint;
 	result["owner"] = owner;
 	result["type"] = type;
