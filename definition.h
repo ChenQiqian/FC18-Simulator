@@ -20,7 +20,7 @@
 #include <iostream>
 #include <cassert>
 #include <cmath>
-#include "./json/json.h"
+#include "json/json.h"
 
 using namespace std;
 typedef int    TMovePoint;     //【FC18】行动力
@@ -807,6 +807,12 @@ class Game : public Info {
         return gameMap[p.m_y][p.m_x];
     }
     // 辅助判定函数
+    bool isPosValid(TPoint p) {
+        return isPosValid(p.m_x, p.m_y);
+    }  //判断点是否越界
+    bool isPosValid(int x, int y) {
+        return x >= 0 && x < m_width && y >= 0 && y < m_height;
+    }
     bool isMyTower(TPlayerID pid, TTowerID tid) {
         return pid == towerInfo[tid].ownerID;
     }
@@ -825,7 +831,7 @@ class Game : public Info {
     }
     int countCorpsNum(TPlayerID pid, corpsType type) {
         int ans = 0;
-        for(TCorpsID cid : playerInfo[pid].corps) {
+        for(TCorpsID cid : playerInfo[pid - 1].corps) {
             if(corpsInfo[cid].type == type)
                 ans++;
         }
@@ -902,11 +908,12 @@ class Game : public Info {
         playerInfo[pid - 1].corps.insert(cid);
     }
     void addConstruct(TPlayerID pid, TPoint p, constructCorpsType type) {
+        // cerr << "successfully add construct for " << pid << " at " << p.m_x
+        // << "," << p.m_y << endl;
         if(countCorpsNum(pid, Construct) >= MAX_CONSTRUCT_NUM) {
             return;
         }
         TCorpsID cid = corpsInfo.size();
-
         corpsInfo.push_back({p, cid, pid, Construct, Archer, type});
         totalCorps++;
         // update player
@@ -978,6 +985,7 @@ class Game : public Info {
     }
     void towerProduct(TowerInfo &tower) {
         // 生产上一回合剩下的
+        // cerr << "test towerproduct";
         if(tower.pdtType == NOTASK)
             return;
         tower.pointsNeeded[tower.pdtType] -= tower.productPoint;
@@ -1226,7 +1234,7 @@ class Game : public Info {
             TowerInitConfig[tower.level - 1].initHealthPoint;
         tower.healthPoint =
             max(tower.healthPoint + int(double(1) / 3 * maxHealth), maxHealth);
-        corps.BuildPoint -= 1 ;
+        corps.BuildPoint -= 1;
         if(corps.BuildPoint <= 0) {
             deadCorps(corps.ID);
         }
@@ -1336,6 +1344,8 @@ class Game : public Info {
         // todo: 别忘了加过渡的单位
         for(int j = 0; j < m_width; j++) {
             for(int i = 0; i < m_height; i++) {
+                block({i, j}).occupyPoint.resize(0);
+                block({i, j}).occupyPoint.resize(totalPlayers);
                 for(int pid = 1; pid <= totalPlayers; pid++)
                     block({i, j}).occupyPoint[pid - 1] = 0;
             }
@@ -1391,7 +1401,7 @@ class Game : public Info {
         for(TPlayerID pid = 1; pid <= totalPlayers; pid++) {
             if(playerInfo[pid - 1].tower.size() == 0) {
                 playerInfo[pid - 1].score =
-                    (-totalPlayers * MAX_ROUND + totalRounds - 100) / 100 ;
+                    (-totalPlayers * MAX_ROUND + totalRounds - 100) / 100;
                 playerInfo[pid - 1].alive = false;
             }
             else {
@@ -1426,17 +1436,11 @@ class Game : public Info {
         }
     }
     Json::Value play(TPlayerID playerID, CommandList &todoCommandList) {
-        refresh();
-        updateProduct(playerID);
+        refresh();  // 全局刷新，不是你的也刷新了
         operateCommandList(playerID, todoCommandList);
+        updateProduct(playerID);
         updateInfo();
         return asJson();
-    }
-    bool isPosValid(TPoint p) {
-        return isPosValid(p.m_x, p.m_y);
-    }  //判断点是否越界
-    bool isPosValid(int x, int y) {
-        return x >= 0 && x < m_width && y >= 0 && y < m_height;
     }
 };
 
