@@ -8,8 +8,11 @@ using namespace std;
 
 Game *g;
 
-int main() {
+int main(int argc, char **argv) {
     int id = time(0), w = 15, h = 15, p = 4;
+    if(argc != 1){
+        sscanf(argv[1],"%d",id);
+    }
     g = new Game(w, h, p, id);
     string f[p], js[2];
     // clang-format off
