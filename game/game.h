@@ -2,6 +2,9 @@
 
 #ifndef _GAME_H_
 #    define _GAME_H_
+
+const static TPoint mp[4] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
+
 class Game : public Info {
   private:
     int                      id;        // 地图编号
@@ -11,8 +14,10 @@ class Game : public Info {
     vector<vector<mapBlock>> _gameMap_backup;  // 考虑到可能有塔变成平地的情况
 
   public:
+    Game();
     Game(TMap _width, TMap _height, TPlayer _players, int _id);
-    Game(Json::Value json, bool game);
+    Game(Json::Value json, bool isGame);
+    Game(Info &info);
     ~Game();
     //【FC18】获取地图宽度
     TMap getWidth() const;
@@ -28,6 +33,8 @@ class Game : public Info {
     bool isMyTower(TPlayerID pid, TTowerID tid);
     bool isMyCorps(TPlayerID pid, TCorpsID cid);
     bool isMyCell(TPlayerID pid, TPoint p);
+    bool canMove(TCorpsID cid, int dir);
+    bool canBuildTower(TPlayerID pid, TPoint pos);
     // 辅助计算函数
     int         needMoveCost(TPoint a, TPoint b);
     int         countCorpsNum(TPlayerID pid, corpsType type);
@@ -59,7 +66,7 @@ class Game : public Info {
     void operateCommandList(TPlayerID playerID, CommandList &todoCommandList);
     // 维护相关函数
     void updateProduct(TPlayerID pid);  // 维护生产力
-    void updateTerrain();                // 维护地形。
+    void updateTerrain();               // 维护地形。
     void updateMapOwner();  // 更新格子的归属。 全图更新，先都抹掉，再重新计算
     void updatePlayer();  // 更新玩家占领地盘和分数，判断玩家是否出局
     void updateInfo();  // 回合之后统一的update

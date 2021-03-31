@@ -1,5 +1,6 @@
 #include "game.h"
 
+Game::Game() {}
 Game::Game(TMap _width, TMap _height, TPlayer _players, int _id)
     : Info(_players), id(_id), m_width(_width), m_height(_height) {
     srand(id);
@@ -12,11 +13,25 @@ Game::Game(TMap _width, TMap _height, TPlayer _players, int _id)
     updatePlayer();
 }
 // load files as a start,
-Game::Game(Json::Value json, bool game = 1) : Info(json) {
-    if(game == 0)
-        return;
-    id = -1;
+Game::Game(Json::Value json, bool isGame = 1) : Info(json) {
+    id      = -1;
     m_width = m_height = 15;
+    if(isGame == 0)
+        return;
+    // Json::Value &_towervalue = json["towerInfo"];
+    // for(unsigned int i = 0; i < _towervalue.size(); i++) {
+    //     Json::Value &PointsNeeded = _towervalue["PointsNeeded"];
+    //     for(int j = 0; j < TOWER_PRODUCT_TASK_NUM; j++) {
+    //         towerInfo[i].pointsNeeded[j] = PointsNeeded[j].asInt();
+    //     }
+    // }
+}
+Game::Game(Info &info) : Info(info) {
+    id      = -1;
+    m_width = m_height = 15;
+    gameMap            = *(gameMapInfo);
+    _gameMap_backup    = *(gameMapInfo);
+
     // Json::Value &_towervalue = json["towerInfo"];
     // for(unsigned int i = 0; i < _towervalue.size(); i++) {
     //     Json::Value &PointsNeeded = _towervalue["PointsNeeded"];
@@ -100,8 +115,43 @@ bool Game::isMyCorps(TPlayerID pid, TCorpsID cid) {
 bool Game::isMyCell(TPlayerID pid, TPoint p) {
     return pid == block(p).owner;
 }
+bool Game::canMove(TCorpsID cid, int dir) {
+    CorpsInfo &corps = corpsInfo[cid];
+    TPoint     pos = corps.pos, dest = corps.pos + mp[dir];
+    if(!isPosValid(dest)) {
+        return false;
+    }
+    if(block(dest).TowerIndex != -1 &&
+       !isMyTower(corps.owner, block(dest).TowerIndex)) {
+        return false;
+    }
+    if(block(dest).TowerIndex == -1 && block(dest).corps.size() >= 2) {
+        return false;
+    }
+    if(block(dest).TowerIndex == -1 && block(dest).corps.size() == 1 &&
+       (!isMyCorps(corps.owner, block(dest).corps[0]) ||
+        corpsInfo[block(dest).corps[0]].type == corps.type)) {
+        return false;
+    }
+    if(needMoveCost(pos, dest) > corps.movePoint) {
+        return false;
+    }
+    return true;
+}
+bool Game::canBuildTower(TPlayerID pid, TPoint pos) {
+    if(block(pos).TowerIndex != -1) {
+        return false;
+    }
+    if(!isMyCell(pid, pos)) {
+        return false;
+    }
+    return true;
+}
 // 辅助计算函数
 int Game::needMoveCost(TPoint a, TPoint b) {
+    if(!isPosValid(a) || !isPosValid(b)) {
+        return INF;
+    }
     return ceil(
         double(CorpsMoveCost[block(a).type] + CorpsMoveCost[block(b).type]) /
             2 -
@@ -268,7 +318,6 @@ void Game::towerProduct(TowerInfo &tower) {
     if(tower.pdtType == NOTASK)
         return;
     tower.pointsNeeded[tower.pdtType] -= tower.productPoint;
-    // cerr << tower.pdtType << " points:" << tower.pointsNeeded[tower.pdtType] << endl;
     if(tower.pointsNeeded[tower.pdtType] > 0) {
         return;
     }
@@ -353,27 +402,10 @@ void Game::towerAttackCorps(TowerInfo &tower, const vector<int> &par) {
 }
 // 兵团相关命令
 void Game::corpsMove(CorpsInfo &corps, const vector<int> &par) {
-    const static TPoint mp[4] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
-    TPoint              pos = corps.pos, dest = corps.pos + mp[par[2]];
-    if(!isPosValid(dest)) {
+    if(!canMove(corps.ID, par[2])) {
         return;
     }
-    if(block(dest).TowerIndex != -1 &&
-       !isMyTower(corps.owner, block(dest).TowerIndex)) {
-        return;
-    }
-    if(block(dest).TowerIndex == -1 && block(dest).corps.size() >= 2) {
-        return;
-    }
-    if(block(dest).TowerIndex == -1 && block(dest).corps.size() == 1 &&
-       (!isMyCorps(corps.owner, block(dest).corps[0]) ||
-        corpsInfo[block(dest).corps[0]].type == corps.type)) {
-        return;
-    }
-    if(needMoveCost(pos, dest) > corps.movePoint) {
-        return;
-    }
-
+    TPoint pos = corps.pos, dest = corps.pos + mp[par[2]];
     corps.pos = dest;
     for(size_t i = 0; i < block(pos).corps.size(); i++) {
         if(block(pos).corps[i] == corps.ID) {
@@ -488,12 +520,7 @@ void Game::corpsBuild(CorpsInfo &corps, const vector<int> &par) {
     if(corps.movePoint <= 0) {
         return;
     }
-    if(block(corps.pos).TowerIndex != -1) {
-        return;
-    }
-    if(!isMyCell(corps.owner, corps.pos)) {
-        return;
-    }
+    canBuildTower(corps.owner, corps.pos);
     deadCorps(corps.ID);
     addTower(corps.owner, corps.pos);
 }
@@ -609,7 +636,6 @@ void Game::updateProduct(TPlayerID pid) {
         towerProduct(tower);
     }
     // cerr << endl;
-
 }
 // 维护地形。
 void Game::updateTerrain() {
@@ -786,17 +812,15 @@ void Game::print() {
 }
 Json::Value Game::asJson() {
     Json::Value result = Info::asJson();
-    // // 主要是要保存塔的附加信息 ?
-    // // 还有没有其他的乱七八糟的附加信息？
-    Json::Value _towervalue = result["towerInfo"];
-    result.removeMember("towerInfo");
+    // 主要是要保存塔的附加信息 ?
+    // 还有没有其他的乱七八糟的附加信息？
+    Json::Value &_towervalue = result["towerInfo"];
     for(unsigned int i = 0; i < _towervalue.size(); i++) {
         Json::Value PointsNeeded;
         for(int j = 0; j < TOWER_PRODUCT_TASK_NUM; j++) {
             PointsNeeded.append(towerInfo[i].pointsNeeded[j]);
         }
-        _towervalue[i]["PointsNeeded"] = PointsNeeded;
+        _towervalue["PointsNeeded"] = PointsNeeded;
     }
-    result["towerInfo"] = _towervalue;
     return result;
 }

@@ -651,6 +651,7 @@ public:
 		if (size() >= MAX_CMD_NUM)
 			return;
 		m_commands.emplace_back(_FC18type, _FC18parameters);
+		// cerr << _FC18type << " " << m_commands.back().parameters[0] << " " << m_commands.back().parameters[1] << " " << m_commands.back().parameters[2]  << endl;
 	}
 	//【FC18】由默认向量数组添加命令（需要拷贝构造）
 	void addCommand(commandType _FC18type, vector<int> _FC18parameters) 
@@ -663,6 +664,10 @@ public:
 		m_commands.push_back(newCmd);
 	}
 	//【FC18】移除第n条命令
+	void clear()
+	{
+		m_commands.clear();
+	}
 	void removeCommand(int n) 
 	{
 		if (n < 0 || n >= size())
@@ -708,9 +713,9 @@ public:
 	};			  // 空构造函数 —— swm_sxt
 	Info(Json::Value);	  // 从Json对象构造 —— swm_sxt
 	~Info() {
-		if(deleteAble){
-			delete gameMapInfo;
-		}
+		// if(deleteAble){
+		// 	delete gameMapInfo;
+		// }
 	}
 	TPlayer totalPlayers; //【FC18】总玩家数（4人）
 	TPlayer playerAlive;  //【FC18】剩余玩家数（还活着的）
