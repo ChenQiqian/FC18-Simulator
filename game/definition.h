@@ -127,7 +127,7 @@ enum CorpsCommandEnum
 {//                                                      作战兵团        工程兵团
 	CMove = 0,            //在地图上移动                     √              √
 	//CStation = 1,       //驻扎在地图方格（无自己塔）         √              √
-	CStationTower = 2,    //驻扎在塔（自己势力的塔）           √              √
+	// CStationTower = 2,    //驻扎在塔（自己势力的塔）           √              √
 	CAttackCorps = 3,     //攻击对方势力的兵团                √
 	CAttackTower = 4,     //攻击对方势力的塔                  √
 	//CRegroup = 5,       //兵团整编                         √
@@ -142,7 +142,7 @@ enum CmdJsonNumber
 {
 	JMove = 0,
 	// JStation = 1,
-	JStationTower = 2,
+	// JStationTower = 2,
 	JAttackCorps = 3,
 	JAttackTower = 4,
 	// JRegroup = 5,
@@ -571,6 +571,8 @@ public:
 
 // 简化傻逼 enum，哪个傻逼想出来的，祝他switch写到吐
 terrainType getTerrainEnum(int x);
+CorpsCommandEnum getCorpsCommandEnum(int x);
+
 
 //常用数学运算
 //二维坐标减运算

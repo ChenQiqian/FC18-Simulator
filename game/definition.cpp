@@ -35,6 +35,18 @@ terrainType getTerrainEnum(int x) {
     }
 }
 
+CorpsCommandEnum getCorpsCommandEnum(int x){
+    switch(x){
+        case 0: return CMove;
+        case 3: return CAttackCorps;
+        case 4: return CAttackTower;
+        case 7: return CBuild;
+        case 8: return CRepair;
+        case 9: return CChangeTerrain;
+        default:assert(0);
+    }
+}
+
 /***********************************************************************************************
 *函数名 :【FC18】getDist获取距离函数函数
 *函数功能描述 : 计算FC18规则所述两个点之间的距离
@@ -191,8 +203,8 @@ Json::Value mapBlock::asJson() const {
     result["TowerIndex"]  = TowerIndex;
 
     Json::Value corpsArray;
-    for(unsigned int i = 0; i < corps.size(); i++) {
-        corpsArray.append(corps[i]);
+    for(auto cid : corps) {
+        corpsArray.append(cid);
     }
     result["corps"] = corpsArray;
     return result;

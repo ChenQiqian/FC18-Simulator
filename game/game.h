@@ -85,9 +85,8 @@ class Game : public Info {
     Json::Value play(TPlayerID playerID, CommandList &todoCommandList);
     void        print();
     Json::Value asJson();
-    friend bool is_same(const Game &a, const Game &b);
 };
 
-void assert_same(const Game &a, const Game &b);
+void assertSame(const Game &a, const Game &b);
 
 #endif

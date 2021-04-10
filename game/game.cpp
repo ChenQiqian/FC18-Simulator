@@ -834,14 +834,14 @@ Json::Value Game::asJson() {
     return result;
 }
 
-void assert_same(const mapBlock &a, const mapBlock &b) {
+void assertSame(const mapBlock &a, const mapBlock &b) {
     assert((a.type == b.type));
     assert((a.owner == b.owner));
     assert((a.TowerIndex == b.TowerIndex));
     assert((a.corps == b.corps));
 }
 
-void assert_same(const PlayerInfo &a, const PlayerInfo &b) {
+void assertSame(const PlayerInfo &a, const PlayerInfo &b) {
     assert(a.id == b.id);
     assert(a.rank == b.rank);
     assert(a.score == b.score);
@@ -850,7 +850,7 @@ void assert_same(const PlayerInfo &a, const PlayerInfo &b) {
     assert(a.corps == b.corps);
 }
 
-void assert_same(const CorpsInfo &a, const CorpsInfo &b) {
+void assertSame(const CorpsInfo &a, const CorpsInfo &b) {
     assert(a.exist == b.exist);
     assert(a.pos == b.pos);
     assert(a.ID == b.ID);
@@ -863,7 +863,7 @@ void assert_same(const CorpsInfo &a, const CorpsInfo &b) {
     assert(a.healthPoint == b.healthPoint);
 }
 
-void assert_same(const TowerInfo &a, const TowerInfo &b) {
+void assertSame(const TowerInfo &a, const TowerInfo &b) {
     assert(a.exist == b.exist);
     assert(a.ID == b.ID);
     assert(a.ownerID == b.ownerID);
@@ -876,13 +876,13 @@ void assert_same(const TowerInfo &a, const TowerInfo &b) {
     assert(a.level == b.level);
 }
 
-void assert_same(const Game &a, const Game &b) {
+void assertSame(const Game &a, const Game &b) {
     // check map
     assert(a.getHeight() == b.getHeight() && a.getWidth() == b.getWidth());
     int w = a.getWidth(), h = a.getHeight();
     for(int j = 0; j < w; j++) {
         for(int i = 0; i < h; i++) {
-            assert_same(a.block({i, j}), b.block({i, j}));
+            assertSame(a.block({i, j}), b.block({i, j}));
         }
     }
     // check info
@@ -894,17 +894,17 @@ void assert_same(const Game &a, const Game &b) {
     // + player
     assert(a.playerInfo.size() == b.playerInfo.size());
     for(size_t i = 0; i < a.playerInfo.size(); i++) {
-        assert_same(a.playerInfo[i], b.playerInfo[i]);
+        assertSame(a.playerInfo[i], b.playerInfo[i]);
     }
     // corp
     assert(a.corpsInfo.size() == b.corpsInfo.size());
     for(size_t i = 0; i < a.corpsInfo.size(); i++) {
-        assert_same(a.corpsInfo[i], b.corpsInfo[i]);
+        assertSame(a.corpsInfo[i], b.corpsInfo[i]);
     }
 
     // tower
     assert(a.towerInfo.size() == b.towerInfo.size());
     for(size_t i = 0; i < a.towerInfo.size(); i++) {
-        assert_same(a.towerInfo[i], b.towerInfo[i]);
+        assertSame(a.towerInfo[i], b.towerInfo[i]);
     }
 }

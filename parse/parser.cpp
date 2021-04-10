@@ -1,4 +1,5 @@
 #include "../game/game.h"
+#include <array>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -13,15 +14,18 @@ using namespace std;
 // 一个是全用他维护的信息，一个是用我们 Simulator 模拟的信息
 // 两者比较，如果错了，立刻报错。
 
-Game _g(15, 15, 4);     // 全用它的数据，确切的说是拿他的数据和我模拟出来的对照
+Game _g(15, 15, 4);  // 全用它的数据，确切的说是拿他的数据和我模拟出来的对照
 Game _g_my(15, 15, 4);  // 全用我的数据
+
+const int ROUND_NUMBER = 1201;
 
 struct Round {
     vector<vector<int>> corps, tower, map, player;
 };
 
-vector<vector<string>> round_string;
-vector<Round>          round_info;
+size_t         round_cnt = 0;
+vector<string> round_string[ROUND_NUMBER];
+Round          round_info[ROUND_NUMBER];
 
 string &L(size_t r, size_t l) {
     return round_string[r][l];
@@ -31,19 +35,20 @@ bool is_c(size_t r, size_t l, char c) {
     return (L(r, l)[0] == '#' && L(r, l)[1] == c);
 }
 
-void split_round_info(istream &fin) {
+void splitRoundInfo(istream &fin) {
     string        tmp;
     istringstream strin;
+
     while(true) {
-        round_string.push_back({});
         while(true) {
             getline(fin, tmp, '\n');
             if(tmp.length() <= 1) {  // maybe = 1? 有没有最后的换行符号？
                 break;
             }
-            round_string.back().push_back(tmp);
+            round_string[round_cnt].push_back(tmp);
         }
-        if(round_string.back().size() == 0) {
+        round_cnt++;
+        if(round_string[round_cnt - 1].size() == 0) {
             break;
         }
         // fin.get(); // 假设只有一个 \n
@@ -54,10 +59,10 @@ void split_round_info(istream &fin) {
     //     }
     //     cerr << "------" << endl;
     // }
-    for(size_t r = 0; r < round_string.size(); r++) {
+    for(size_t r = 0; r < round_cnt; r++) {
         size_t nowl = 0;
         // find corp
-        round_info.push_back({{},{},{},{}});
+        // round_info.push_back({{},{},{},{}});
         while(nowl < round_string[r].size() && !is_c(r, nowl, 'c')) {
             nowl++;
         }
@@ -199,7 +204,37 @@ void split_round_info(istream &fin) {
     }
 }
 
-void init_gamemap() {  // use round 0 to get init info!
+vector<string>         command_string[ROUND_NUMBER];
+vector<array<int, 10>> round_command[ROUND_NUMBER];
+
+void splitRoundCommand(istream &fin) {
+    string tmp;
+    size_t i = 0;
+    while(true) {
+        getline(fin, tmp, '\n');
+        if(tmp.length() == 0) {
+            i++;
+        }
+        else {
+            command_string[i].push_back(tmp);
+        }
+    }
+    assert(i == round_cnt);
+    // read parameters
+    istringstream strin;
+    for(size_t r = 0; r < round_cnt; r++) {
+        round_command[r].resize(command_string[r].size());
+        for(size_t l = 0; l < command_string[r].size(); l++) {
+            strin = istringstream(command_string[r][l]);
+            for(int i = 0; i < 9; i++) {
+                strin >> round_command[r][l][i];
+            }
+        }
+    }
+    // get!
+}
+
+void initGameMap() {  // use round 0 to get init info!
     size_t r = 0;
     // 最先创建空地图和空用户信息（在game初始化的时候就做好了
     // 给地图上色
@@ -221,21 +256,143 @@ void init_gamemap() {  // use round 0 to get init info!
 
     // process player
     for(vector<int> &p : round_info[r].player) {
-        PlayerInfo &player = _g.playerInfo[p[0]-1];
-        player.score = p[3],player.rank = p[4];
+        PlayerInfo &player = _g.playerInfo[p[0] - 1];
+        player.score = p[3], player.rank = p[4];
     }
 }
 
-void parse_and_compare() {
+corpsMoveDir getMoveDir(TPoint from, TPoint to) {
+    TPoint tmp = to - from;
+    int    t   = -1;
+    for(int i = 0; i < 4; i++) {
+        if(tmp == mp[i]) {
+            assert(t == -1);
+            t = i;
+        }
+    }
+    assert(t != -1);
+    switch(t) {
+        case 0: return CUp;
+        case 1: return CDown;
+        case 2: return CLeft;
+        case 3: return CRight;
+        default: assert(0);
+    }
+}
+
+Command getCommand(array<int, 10> &par) {
+    /*<文件头无空行>
+    round 0<回合数>
+    #command
+    <下面每行是一条玩家命令，所有命令均为成功执行的命令，按执行的先后顺序被记录在这里>
+    示例：
+    1 7 -1 4 1 -1 -1 -1 -1
+    <一行9个数，依次与下面的结构体信息对应>
+    1        public string from_id;           //发起者的id
+    2        public string cm_tpye;           //发出命令的类型，包括所有可能的命令类型，兵团操作的cm_type与枚举值相等，塔生产任务和攻击兵团的cm_type分别为10和11
+    3        public string getcm_id;          //执行命令的兵团/塔编号
+    4        public string aim_x;               //被攻击的兵团/塔的x坐标，移动目标点的x坐标，原地不移动为-1
+    5        public string aim_z;               //被攻击的兵团/塔的z坐标，移动目标点的z坐标，原地不移动为-1
+    6        public string result;               //被攻击的塔/兵团是否被摧毁/消灭（0双方都存活|1只有攻方存活|2只有对方存活|3双方都死亡）
+    7        public string dT;                   //修改地形时的目标地形
+    8        public string pT;                   //生产兵团时的兵团种类
+    9        public string another_id;      //被攻击的塔、兵团的id，生产出来新塔的id
+    <回合与回合间有1行空行间隔>
+    <文件尾，即最后一回合所有命令之后，紧接着一行空行>
+    */
+    assert(par[0] == _g_my.myID);
+    // clang-format off
+    switch(par[1]) {
+        case JMove:
+            return Command(
+                corpsCommand,
+                {par[1], par[2],
+                 getMoveDir(_g_my.corpsInfo[par[2]].pos, {par[3], par[4]})});
+        case JAttackCorps:
+        case JAttackTower:
+            return Command(corpsCommand, {par[1], par[2], par[8]});
+        case JBuild: 
+            return Command(corpsCommand, {par[1], par[2]});
+        case JRepair: 
+            return Command(corpsCommand, {par[1], par[2]});
+        case JChangeTerrain:
+            return Command(corpsCommand, {par[1], par[2], par[6]});
+        case JProduct: 
+            return Command(towerCommand, {par[1], par[2], par[7]});
+        case JTowerAttackCorps:
+            return Command(towerCommand, {par[1], par[2], par[8]});
+        default: assert(0); break;
+    }
+    // clang-format on
+}
+// the point is that, this is updated real-time.
+
+// so you cannot process the whole command list, you must process one, then do one.
+
+void getCommandList(Game &g, size_t r) {
+    // 考虑第 r 个回合
+    // 当前的 _g 和 _g_my 里面都是截至上一个回合的数据，可以作为参考。
+    for(size_t i = 0; i < round_command[r].size(); i++) {
+        Command tmp = getCommand(round_command[r][i]);
+        g.doCommand(_g_my.myID, tmp);
+        // 好像还应该干点啥来着
+    }
+}
+
+void updateFromInfo(Game &g, size_t r){
+    Round &info = round_info[r];
+    for(vector<int> par : info.map){
+        g.block({par[0],par[1]}).type = getTerrainEnum(par[2]);
+        g.block({par[0],par[1]}).owner = par[3];
+    }
+    for(vector<int> par : info.player) {
+        
+    }
+    for(vector<int> par : info.corps){
+
+    }
+    info.tower;
+}
+
+
+void parse() {
     // 维护它的主要是是要记录出兵的位置，是要服务于命令list的。
-    fstream fin("everyround_info.txt");
-    split_round_info(fin);
-    init_gamemap();
+    ifstream fround_info("everyround_info.txt"), fcommand_info("log_info.txt");
+    splitRoundInfo(fround_info);
+    splitRoundCommand(fcommand_info);
+    fround_info.close(), fcommand_info.close();
+    initGameMap();
     _g_my.updateInfo();
     _g.updateInfo();
-    assert_same(_g, _g_my);
+    assertSame(_g, _g_my);
+}
+
+void compare() {
+    TPlayerID nowPlayer = 0;
+    for(size_t r = 0; r < round_cnt; r++) {
+        nowPlayer++;
+        if(nowPlayer > 4)
+            nowPlayer -= 4;
+        _g.myID    = nowPlayer;
+        _g_my.myID = nowPlayer;
+        // 开始模拟！
+        // 先处理command！（可能会需要上一回合的game资料）
+        // 运用mygame上面
+        _g.refresh();  // 全局刷新，不是你的也刷新了
+        _g_my.refresh();
+        getCommandList(_g_my, r);  // get & do command list
+        _g_my.updateProduct(_g_my.myID);
+        _g_my.updateInfo();
+        // 再根据新的局面更新game
+        updateFromInfo(_g, r);
+        // 比较！
+        assertSame(_g, _g_my);
+    }
 }
 
 int main() {
-    parse_and_compare();
+    // cerr << round_command[1][2] << endl;
+    parse();
+    compare();
+    return 0;
 }
